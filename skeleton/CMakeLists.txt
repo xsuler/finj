@@ -10,6 +10,7 @@ target_compile_features(SkeletonPass PRIVATE cxx_range_for cxx_auto_type)
 # otherwise, we'll get linker errors about missing RTTI data.
 set_target_properties(SkeletonPass PROPERTIES
     COMPILE_FLAGS "-fno-rtti"
+    LINK_FLAGS "-Wl,-znodelete"
 )
 
 # Get proper shared-library behavior (where symbols are not necessarily
