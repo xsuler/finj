@@ -65,7 +65,7 @@ namespace {
       BranchInst* toNoneEHC=BranchInst::Create(nehc);
       Instruction* inst_t=SplitBlockAndInsertIfThen((Value*) inst, BI, true);
       ReplaceInstWithInst(inst_t,toEHC);
-      ReplaceInstWithInst(BI,toNoneEHC);
+      //ReplaceInstWithInst(BI,toNoneEHC);
     }
 
     bool isErrorHandlingBlock(BasicBlock *BB){
