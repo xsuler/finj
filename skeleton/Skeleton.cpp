@@ -52,11 +52,11 @@ namespace {
     }
 
     void insertFunc(BasicBlock &BB, BranchInst *BI, LLVMContext &context, BasicBlock* ehc, BasicBlock* nehc){
-      FunctionType *type = FunctionType::get(Type::getInt32Ty(context), {Type::getInt32PtrTy(context)}, false);
+      FunctionType *type = FunctionType::get(Type::getInt64Ty(context), {Type::getInt64PtrTy(context)}, false);
       auto callee = BB.getModule()->getOrInsertFunction("willInject", type);
       Value *c=callee.getCallee();
       IRBuilder<> builder(&BB);
-      ConstantInt *cuid = builder.getInt32((this->uid)++);
+      ConstantInt *cuid = builder.getInt64((this->uid)++);
       CallInst *inst = CallInst::Create(c, {cuid});
       inst->insertBefore(BI);
       BranchInst* toEHC=BranchInst::Create(ehc);

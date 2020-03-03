@@ -1,11 +1,12 @@
 #include<stdlib.h>
 #include<stdio.h>
 #include<string.h>
+#include<stdint.h>
 
 extern "C" {
-  int willInject(int uid);
+  int64_t willInject(int64_t uid);
 }
-int willInject(int uid){
+int64_t willInject(int64_t uid){
   char* tenv=getenv("FAULTS");
   printf(tenv);
   char *env=(char*)malloc(sizeof(char)*strlen(tenv));;
