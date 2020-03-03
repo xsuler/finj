@@ -58,7 +58,7 @@ namespace {
       auto callee = BB.getModule()->getOrInsertFunction("willInject", type);
       Value *c=callee.getCallee();
       IRBuilder<> builder(&BB);
-      ConstantInt *cuid = builder.getInt32(this->uid++);
+      ConstantInt *cuid = builder.getInt32((this->uid)++);
       CallInst *inst = CallInst::Create(c, {cuid});
       inst->insertBefore(BI);
       BranchInst* toEHC=BranchInst::Create(ehc);
