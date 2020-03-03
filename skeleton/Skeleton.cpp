@@ -90,5 +90,5 @@ static void registerSkeletonPass(const PassManagerBuilder &,
   PM.add(new SkeletonPass());
 }
 static RegisterStandardPasses
-  RegisterMyPass(PassManagerBuilder::EP_EarlyAsPossible,
+  RegisterMyPass(PassManagerBuilder::EP_OptimizerLast,
                  registerSkeletonPass);
