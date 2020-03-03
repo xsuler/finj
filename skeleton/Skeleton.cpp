@@ -38,12 +38,10 @@ namespace {
             BasicBlock *TrueDest = BI->getSuccessor(0);
             BasicBlock *FalseDest = BI->getSuccessor(1);
             if(isErrorHandlingBlock(TrueDest)){
-              errs()<<"found one error handling code at true\n";
               insertFunc(BB, BI, context, TrueDest, FalseDest);
               break;
             }
             else if(isErrorHandlingBlock(FalseDest)){
-              errs()<<"found one error handling code at false\n";
               insertFunc(BB, BI, context, FalseDest, TrueDest);
               break;
             }
@@ -73,6 +71,7 @@ namespace {
         if (BranchInst *BI = dyn_cast<BranchInst>(I)){
           if (!BI->isConditional()) {
             if(BI->getOperand(0)->getName() == "fail"){
+              errs()<<"---------------find one fault-----------------\n";
               return true;
             }
           }
@@ -90,5 +89,5 @@ static void registerSkeletonPass(const PassManagerBuilder &,
   PM.add(new SkeletonPass());
 }
 static RegisterStandardPasses
-  RegisterMyPass(PassManagerBuilder::EP_OptimizerLast,
+  RegisterMyPass(PassManagerBuilder::EP_EarlyAsPossible,
                  registerSkeletonPass);

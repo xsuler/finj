@@ -7,6 +7,7 @@ extern "C" {
 }
 int willInject(int uid){
   char* tenv=getenv("FAULTS");
+  printf(tenv);
   char *env=(char*)malloc(sizeof(char)*strlen(tenv));;
   char *rt=env;
   strcpy(env,tenv);

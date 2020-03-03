@@ -1,6 +1,7 @@
 #include<iostream>
 
 using namespace std;
+
 int func(){
   int a;
   cin>>a;
@@ -26,7 +27,7 @@ int main(){
   }
   return 0;
   
-  fail:
+ fail:
   cout<<2<<endl;
   return 0;
 
