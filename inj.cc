@@ -1,37 +1,33 @@
-#include<stdlib.h>
-#include<stdio.h>
-#include<string.h>
-#include<stdint.h>
-
 extern "C" {
-  int64_t willInject(int64_t uid);
-}
-int64_t willInject(int64_t uid){
-  char* tenv=getenv("FAULTS");
-  printf(tenv);
-  char *env=(char*)malloc(sizeof(char)*strlen(tenv));;
-  char *rt=env;
-  strcpy(env,tenv);
-  char* c=env;
-  while(true){
-    int flag=0;
-    if(((*env)==',')||((*env)==0)){
-      if((*env)==0)
-        flag=1;
-      *env=0;
-      if(uid==atoi(c)){
-        free(rt);
-        return true;
-      }
-      c=env+1;
-      if(flag==0)
-        *env=',';
-    }
-    if(*env==0)
-      break;
-    env++;
-  }
-  free(rt);
-  return false;
+  int willInject(int uid);
 }
 
+void getFileContent(char* path, char* buf){
+
+  asm(
+       "movq %0, %%rdi\n\t"
+       "movq $2, %%rax\n\t"
+       "movq $0, %%rsi\n\t"
+       "syscall\n\t"
+
+       "mov %%rax, %%rdi\n\t"
+       "mov $0, %%rax\n\t"
+       "mov %1, %%rsi\n\t"
+       "mov $1000, %%rdx\n\t"
+       "syscall\n\t"
+
+       :
+       :"g" (path), "g" (buf)
+       :"memory"
+       );
+}
+
+
+int willInject(int uid){
+  char buf[1001];
+  getFileContent("/home/sule/faults",buf);
+  if(buf[uid]=='1'){
+    return 1;
+  }
+  return 0;
+}

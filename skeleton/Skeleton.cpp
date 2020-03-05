@@ -33,8 +33,7 @@ namespace {
       {
         BasicBlock &BB = *I;
         if (BranchInst *BI = dyn_cast<BranchInst>(BB.getTerminator())){
-          if (BI->isConditional()) {
-            Value *Cond = BI->getCondition();
+          if(BI->isConditional()){
             BasicBlock *TrueDest = BI->getSuccessor(0);
             BasicBlock *FalseDest = BI->getSuccessor(1);
             if(isErrorHandlingBlock(TrueDest)){
@@ -52,18 +51,19 @@ namespace {
     }
 
     void insertFunc(BasicBlock &BB, BranchInst *BI, LLVMContext &context, BasicBlock* ehc, BasicBlock* nehc){
-      FunctionType *type = FunctionType::get(Type::getInt64Ty(context), {Type::getInt64PtrTy(context)}, false);
+      FunctionType *type = FunctionType::get(Type::getInt32Ty(context), {Type::getInt32PtrTy(context)}, false);
       auto callee = BB.getModule()->getOrInsertFunction("willInject", type);
-      Value *c=callee.getCallee();
+      Function *c=(Function*)callee.getCallee();
+
       IRBuilder<> builder(&BB);
-      ConstantInt *cuid = builder.getInt64((this->uid)++);
-      CallInst *inst = CallInst::Create(c, {cuid});
-      inst->insertBefore(BI);
+      ConstantInt *cuid = builder.getInt32((this->uid)++);
+
+      CallInst *inst = CallInst::Create(callee, {cuid}, "",BI);
+
       BranchInst* toEHC=BranchInst::Create(ehc);
-      BranchInst* toNoneEHC=BranchInst::Create(nehc);
       Instruction* inst_t=SplitBlockAndInsertIfThen((Value*) inst, BI, true);
       ReplaceInstWithInst(inst_t,toEHC);
-      //ReplaceInstWithInst(BI,toNoneEHC);
+
     }
 
     bool isErrorHandlingBlock(BasicBlock *BB){
