@@ -1,4 +1,7 @@
 #include<iostream>
+#include "test.h"
+
+
 using namespace std;
 int func(){
   int a=0;
