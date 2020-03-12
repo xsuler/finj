@@ -107,17 +107,12 @@ namespace {
           unsigned Alignment;
           Value *MaybeMask = nullptr;
           if(isInterestingMemoryAccess(&Inst,&IsWrite,&TypeSize,&Alignment, &MaybeMask)){
-            if(IsWrite){
-                errs()<<"writing of size "<<TypeSize<<" with mask " <<MaybeMask<<"\n";
-            }
-            else
-              errs()<<"reading of size "<<TypeSize<<" with mask " <<MaybeMask<<"\n";
 
             Value* addr=IsWrite?Inst.getOperand(1):Inst.getOperand(0);
             Value* value=IsWrite?Inst.getOperand(0):nullptr;
 
             LLVMContext &context = F.getParent()->getContext();
-            FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getIntNPtrTy(context,TypeSize)}, false);
+            FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt32PtrTy(context)}, false);
             auto callee = BB.getModule()->getOrInsertFunction("report"+to_string(TypeSize), type);
             CallInst *inst = CallInst::Create(callee, {addr}, "",&Inst);
           }

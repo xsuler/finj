@@ -12,7 +12,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
-
+#include <fstream>
 
 using namespace llvm;
 
@@ -22,7 +22,6 @@ namespace {
   struct SkeletonPass : public FunctionPass {
     static char ID;
     SkeletonPass() : FunctionPass(ID) {}
-    int uid{0};
 
     virtual bool runOnFunction(Function &F) {
       if (F.getName()=="willInject"){
@@ -55,8 +54,20 @@ namespace {
       auto callee = BB.getModule()->getOrInsertFunction("willInject", type);
       Function *c=(Function*)callee.getCallee();
 
+      std::ifstream uidf;
+      uidf.open("/root/fuid");
+      int uid;
+      uidf>>uid;
+      uidf.close();
+
+      std::ofstream uidof;
+      uidof.open("/root/fuid");
+      uidof<<uid+1;
+      uidof.close();
+
+      errs()<<"---------------find one fault: "<<uid<< " -----------------\n";
       IRBuilder<> builder(&BB);
-      ConstantInt *cuid = builder.getInt32((this->uid)++);
+      ConstantInt *cuid = builder.getInt32(uid);
 
       CallInst *inst = CallInst::Create(callee, {cuid}, "",BI);
 
@@ -71,7 +82,6 @@ namespace {
         if (BranchInst *BI = dyn_cast<BranchInst>(I)){
           if (!BI->isConditional()) {
             if(BI->getOperand(0)->getName() == "fail"){
-              errs()<<"---------------find one fault-----------------\n";
               return true;
             }
           }
