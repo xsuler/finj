@@ -88,33 +88,43 @@
 
 using namespace llvm;
 
-// remember to use -fno-discard-value-names flag
 
 namespace {
 
   struct SkeletonPass : public FunctionPass {
     static char ID;
     SkeletonPass() : FunctionPass(ID) {}
-    int uid{0};
 
     virtual bool runOnFunction(Function &F) {
+      if(F.getName()=="report_xasan"||F.getName()=="willInject"){
+	  return false;
+     }
+
+      LLVMContext &context = F.getParent()->getContext();
       for (auto &BB : F) {
-        if(F.getName()=="report64"||F.getName()=="report32")
-          continue;
+	  
         for (auto &Inst : BB) {
           bool IsWrite;
           uint64_t TypeSize;
           unsigned Alignment;
-          Value *MaybeMask = nullptr;
-          if(isInterestingMemoryAccess(&Inst,&IsWrite,&TypeSize,&Alignment, &MaybeMask)){
+          if(isInterestingMemoryAccess(&Inst,&IsWrite,&TypeSize,&Alignment)){
+
+            FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt32PtrTy(context),Type::getInt32Ty(context),Type::getInt32Ty(context)}, false);
+            auto callee = BB.getModule()->getOrInsertFunction("report_xasan", type);
+	    IRBuilder<> builder(&BB);
+
+	    ConstantInt *size = builder.getInt32(TypeSize);
+	    ConstantInt *iswrite = builder.getInt32(1);
+	    ConstantInt *isread = builder.getInt32(0);
 
             Value* addr=IsWrite?Inst.getOperand(1):Inst.getOperand(0);
-            Value* value=IsWrite?Inst.getOperand(0):nullptr;
+	    //Value* AddrLong = builder.CreatePointerCast(addr,Type::getInt32PtrTy(context));
 
-            LLVMContext &context = F.getParent()->getContext();
-            FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt32PtrTy(context)}, false);
-            auto callee = BB.getModule()->getOrInsertFunction("report"+to_string(TypeSize), type);
-            CallInst *inst = CallInst::Create(callee, {addr}, "",&Inst);
+	    if(IsWrite)
+		    CallInst::Create(callee, {addr,size,iswrite}, "",&Inst);
+	    else
+		    CallInst::Create(callee, {addr,size,isread}, "",&Inst);
+
           }
         }
       }
@@ -124,13 +134,8 @@ namespace {
     Value * isInterestingMemoryAccess(Instruction *I,
                                                       bool *IsWrite,
                                                       uint64_t *TypeSize,
-                                                      unsigned *Alignment,
-                                                      Value **MaybeMask) {
-      // Skip memory accesses inserted by another instrumentation.
-      if (I->getMetadata("nosanitize")) return nullptr;
-
-      // Do not instrument the load fetching the dynamic shadow address.
-
+                                                      unsigned *Alignment
+                                                      ) {
       Value *PtrOperand = nullptr;
       const DataLayout &DL = I->getModule()->getDataLayout();
       if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
@@ -174,8 +179,6 @@ namespace {
             *Alignment = (unsigned)AlignmentConstant->getZExtValue();
           else
             *Alignment = 1; // No alignment guarantees. We probably got Undef
-          if (MaybeMask)
-            *MaybeMask = CI->getOperand(2 + OpOffset);
           PtrOperand = BasePtr;
         }
       }
@@ -194,10 +197,40 @@ namespace {
         if (PtrOperand->isSwiftError())
           return nullptr;
       }
+      if (auto AI = dyn_cast_or_null<AllocaInst>(PtrOperand))
+	      return isInterestingAlloca(*AI) ? AI : nullptr;
 
       return PtrOperand;
     }
 
+  uint64_t getAllocaSizeInBytes(const AllocaInst &AI) const {
+    uint64_t ArraySize = 1;
+    if (AI.isArrayAllocation()) {
+      const ConstantInt *CI = dyn_cast<ConstantInt>(AI.getArraySize());
+      assert(CI && "non-constant array size");
+      ArraySize = CI->getZExtValue();
+    }
+    Type *Ty = AI.getAllocatedType();
+    uint64_t SizeInBytes =
+        AI.getModule()->getDataLayout().getTypeAllocSize(Ty);
+    return SizeInBytes * ArraySize;
+  }
+
+    bool isInterestingAlloca(const AllocaInst &AI) {
+	  bool IsInteresting =
+	      (AI.getAllocatedType()->isSized() &&
+	       // alloca() may be called with 0 size, ignore it.
+	       ((!AI.isStaticAlloca()) || getAllocaSizeInBytes(AI) > 0) &&
+	       // We are only interested in allocas not promotable to registers.
+	       // Promotable allocas are common under -O0.
+	       (!isAllocaPromotable(&AI)) &&
+	       // inalloca allocas are not treated as static, and we don't want
+	       // dynamic alloca instrumentation for them as well.
+	       !AI.isUsedWithInAlloca() &&
+	       // swifterror allocas are register promoted by ISel
+	       !AI.isSwiftError());
+	  return IsInteresting;
+    }
 
   };
 }
