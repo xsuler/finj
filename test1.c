@@ -1,4 +1,4 @@
 
-#include "test.h"
+#include "tes.h"
 
-long long fault_table=0;
+long long fault_table=1;

@@ -1,6 +1,9 @@
 #include<iostream>
 #include "test.h"
 
+int willInject(int uid){
+  return (fault_table>>uid)&1;
+}
 
 using namespace std;
 int func(){
