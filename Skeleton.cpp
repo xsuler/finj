@@ -96,7 +96,7 @@ namespace {
     SkeletonPass() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F) {
-      if(F.getName()=="report_xasan"||F.getName()=="willInject"){
+      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="printk"){
 	  return false;
      }
 
@@ -109,16 +109,15 @@ namespace {
           unsigned Alignment;
           if(isInterestingMemoryAccess(&Inst,&IsWrite,&TypeSize,&Alignment)){
 
-            FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt32PtrTy(context),Type::getInt32Ty(context),Type::getInt32Ty(context)}, false);
+            FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt64PtrTy(context),Type::getInt64Ty(context),Type::getInt64Ty(context)}, false);
             auto callee = BB.getModule()->getOrInsertFunction("report_xasan", type);
 	    IRBuilder<> builder(&BB);
 
-	    ConstantInt *size = builder.getInt32(TypeSize);
-	    ConstantInt *iswrite = builder.getInt32(1);
-	    ConstantInt *isread = builder.getInt32(0);
+	    ConstantInt *size = builder.getInt64(TypeSize/8);
+	    ConstantInt *iswrite = builder.getInt64(1);
+	    ConstantInt *isread = builder.getInt64(0);
 
             Value* addr=IsWrite?Inst.getOperand(1):Inst.getOperand(0);
-	    //Value* AddrLong = builder.CreatePointerCast(addr,Type::getInt32PtrTy(context));
 
 	    if(IsWrite)
 		    CallInst::Create(callee, {addr,size,iswrite}, "",&Inst);
