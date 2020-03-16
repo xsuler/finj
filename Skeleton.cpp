@@ -96,7 +96,7 @@ namespace {
     SkeletonPass() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F) {
-      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="printk"){
+      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="mark_valid"||F.getName()=="mark_invalid"){
 	  return false;
      }
 
