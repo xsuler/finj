@@ -84,8 +84,10 @@
 #include <sstream>
 #include <string>
 #include <tuple>
+#include<vector>
 
 
+using namespace std;
 using namespace llvm;
 
 
@@ -99,11 +101,12 @@ namespace {
       if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="mark_valid"||F.getName()=="mark_invalid"){
 	  return false;
      }
+     vector<Value*> allocs;
+     vector<int64_t> sizes;
 
       LLVMContext &context = F.getParent()->getContext();
       DataLayout lt=F.getParent()->getDataLayout();
       for (auto &BB : F) {
-	  
         for (auto &Inst : BB) {
           bool IsWrite;
           uint64_t TypeSize;
@@ -131,6 +134,19 @@ namespace {
             Inst.setMetadata("isRedZone",N);
           }
 
+      if (ReturnInst *RI = dyn_cast<ReturnInst>(&Inst)) {
+            IRBuilder<> builder(&BB);
+            for(int i=0;i<allocs.size();i++){
+                Value* redZone = allocs[i];
+                FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt64PtrTy(context),Type::getInt64Ty(context)}, false);
+                auto callee = BB.getModule()->getOrInsertFunction("mark_invalid", type);
+                ConstantInt *size = builder.getInt64(sizes[i]);
+
+                CallInst::Create(callee, {redZone,size}, "",RI);
+   
+            }
+      }
+
       if(isStaticAlloc(&Inst)){
         if(cast<MDString>(Inst.getMetadata("isRedZone")->getOperand(0))->getString()!="true"){
             errs()<<"one alloc\n";
@@ -145,13 +161,6 @@ namespace {
             MDNode* N = MDNode::get(context, MDString::get(context, "true"));
             arr_alloc->setMetadata("isRedZone",N);
             
-            //insert func for redzone
-            FunctionType *typer = FunctionType::get(Type::getVoidTy(context), {Type::getInt64PtrTy(context),Type::getInt64Ty(context)}, false);
-            auto calleer = BB.getModule()->getOrInsertFunction("mark_invalid", typer);
-            long szr=32;
-            ConstantInt *sizer = builder.getInt64(szr);
-            CallInst::Create(calleer, {arr_alloc,sizer}, "",arr_alloc);
-            
 
             //start inserting redzone
 
@@ -159,19 +168,18 @@ namespace {
                 arrayType, 0, "rz1");
             arr_alloc_a->insertAfter(&Inst);
             arr_alloc_a->setMetadata("isRedZone",N);
-            //insert func for redzone
-            auto calleer_a = BB.getModule()->getOrInsertFunction("mark_invalid", typer);
-            CallInst::Create(calleer_a, {arr_alloc_a,sizer}, "",arr_alloc_a);
 
             //insert func for original
             AllocaInst *AI = dyn_cast<AllocaInst>(&Inst);
             FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt64PtrTy(context),Type::getInt64Ty(context)}, false);
             auto callee = BB.getModule()->getOrInsertFunction("mark_valid", type);
-            long sz=AI->getAllocationSizeInBits(lt).getValue();
-            ConstantInt *size = builder.getInt64(sz/8);
+            long sz=AI->getAllocationSizeInBits(lt).getValue()/8;
+            ConstantInt *size = builder.getInt64(sz);
 
             CallInst::Create(callee, {AI,size}, "",&Inst);
 
+            allocs.push_back(&Inst);
+            sizes.push_back(sz);
 
           }
           else{
