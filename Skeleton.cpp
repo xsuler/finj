@@ -98,17 +98,30 @@ namespace {
     SkeletonPass() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F) {
-      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="mark_valid"||F.getName()=="mark_invalid"||F.getName()=="do_set_fault"){
+      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="mark_valid"||F.getName()=="mark_invalid"||F.getName()=="do_set_fault"||F.getName()=="enter_func"||F.getName()=="leave_func"){
 	  return false;
      }
      vector<Value*> allocs;
      vector<int64_t> sizes;
      int auid{0};
 
+
+     int flag=0;
+
+
       LLVMContext &context = F.getParent()->getContext();
       DataLayout lt=F.getParent()->getDataLayout();
       for (auto &BB : F) {
         for (auto &Inst : BB) {
+
+          if(flag==0){
+            flag=1;
+            IRBuilder<> builder(&BB);
+            FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context)}, false);
+            auto callee = BB.getModule()->getOrInsertFunction("enter_func", type);
+            GlobalVariable* name= builder.CreateGlobalString(F.getName());
+            CallInst::Create(callee, {name}, "",&Inst);
+          }
           bool IsWrite;
           uint64_t TypeSize;
           unsigned Alignment;
@@ -146,6 +159,11 @@ namespace {
                 CallInst::Create(callee, {redZone,size}, "",RI);
    
             }
+
+            // insert leave func
+            FunctionType *type = FunctionType::get(Type::getVoidTy(context), {}, false);
+            auto callee = BB.getModule()->getOrInsertFunction("leave_func", type);
+            CallInst::Create(callee, {}, "",&Inst);
       }
 
       if(isStaticAlloc(&Inst)){
