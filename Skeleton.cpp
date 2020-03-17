@@ -98,11 +98,12 @@ namespace {
     SkeletonPass() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F) {
-      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="mark_valid"||F.getName()=="mark_invalid"){
+      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="mark_valid"||F.getName()=="mark_invalid"||F.getName()=="do_set_fault"){
 	  return false;
      }
      vector<Value*> allocs;
      vector<int64_t> sizes;
+     int auid{0};
 
       LLVMContext &context = F.getParent()->getContext();
       DataLayout lt=F.getParent()->getDataLayout();
@@ -149,7 +150,6 @@ namespace {
 
       if(isStaticAlloc(&Inst)){
         if(cast<MDString>(Inst.getMetadata("isRedZone")->getOperand(0))->getString()!="true"){
-            errs()<<"one alloc\n";
             IRBuilder<> builder(&BB);
 
             //start inserting redzone
@@ -157,7 +157,7 @@ namespace {
             Type* it = IntegerType::getInt8Ty(context);
             ArrayType* arrayType = ArrayType::get(it, 32);
             AllocaInst* arr_alloc = new AllocaInst(
-                arrayType, 0, "rz" , &Inst);
+                arrayType, 0, "rz"+to_string(auid++) , &Inst);
             MDNode* N = MDNode::get(context, MDString::get(context, "true"));
             arr_alloc->setMetadata("isRedZone",N);
             
@@ -165,18 +165,17 @@ namespace {
             //start inserting redzone
 
             AllocaInst* arr_alloc_a = new AllocaInst(
-                arrayType, 0, "rz1");
+                arrayType, 0,  "rz"+to_string(auid++));
             arr_alloc_a->insertAfter(&Inst);
             arr_alloc_a->setMetadata("isRedZone",N);
 
             //insert func for original
-            AllocaInst *AI = dyn_cast<AllocaInst>(&Inst);
             FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt64PtrTy(context),Type::getInt64Ty(context)}, false);
             auto callee = BB.getModule()->getOrInsertFunction("mark_valid", type);
-            long sz=AI->getAllocationSizeInBits(lt).getValue()/8;
+            long sz=dyn_cast<AllocaInst>(&Inst)->getAllocationSizeInBits(lt).getValue()/8;
             ConstantInt *size = builder.getInt64(sz);
 
-            CallInst::Create(callee, {AI,size}, "",&Inst);
+            CallInst::Create(callee, {&Inst,size}, "",arr_alloc_a);
 
             allocs.push_back(&Inst);
             sizes.push_back(sz);
