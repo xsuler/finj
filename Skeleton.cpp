@@ -99,7 +99,7 @@ namespace {
     SkeletonPass() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F) {
-      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="mark_valid"||F.getName()=="mark_invalid"||F.getName()=="enter_func"||F.getName()=="leave_func"||F.getName()=="memcpy"||F.getName()=="printk"||F.getName()=="vprintk_common"||F.getName()=="_spin_lock_recursive"||F.getName()=="_spin_lock"||F.getName()=="_spin_lock_cb"||F.getName()=="vsnprintf"){
+      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="mark_valid"||F.getName()=="mark_invalid"||F.getName()=="enter_func"||F.getName()=="leave_func"||F.getName()=="do_set_fault"||F.getName()=="memcpy"){
 	  return false;
      }
      vector<Value*> allocs;
@@ -124,23 +124,23 @@ namespace {
             GlobalVariable* name= builder.CreateGlobalString(F.getName());
             CallInst::Create(callee, {name}, "",&Inst);
 
-            Type* it = IntegerType::getInt8Ty(context);
-            ArrayType* arrayType = ArrayType::get(it, 32);
-            AllocaInst* arr_alloc = new AllocaInst(
-                arrayType, 0, "rz"+to_string(auid++) , &Inst);
-            MDNode* N = MDNode::get(context, MDString::get(context, "true"));
-            arr_alloc->setMetadata("isRedZone",N);
-
-            //insert func for redzone
-            FunctionType *type_r = FunctionType::get(Type::getVoidTy(context), {Type::getInt64PtrTy(context),Type::getInt64Ty(context)}, false);
-            auto callee_r = BB.getModule()->getOrInsertFunction("mark_invalid", type_r);
-            ConstantInt *size_r = builder.getInt64(32);
-
-            CallInst* ci=CallInst::Create(callee_r, {arr_alloc,size_r}, "");
-	    ci->insertAfter(arr_alloc);
-
-            allocs.push_back(arr_alloc);
-            sizes.push_back(32);
+//            Type* it = IntegerType::getInt8Ty(context);
+//            ArrayType* arrayType = ArrayType::get(it, 32);
+//            AllocaInst* arr_alloc = new AllocaInst(
+//                arrayType, 0, "rz"+to_string(auid++) , &Inst);
+//            MDNode* N = MDNode::get(context, MDString::get(context, "true"));
+//            arr_alloc->setMetadata("isRedZone",N);
+//
+//            //insert func for redzone
+//            FunctionType *type_r = FunctionType::get(Type::getVoidTy(context), {Type::getInt64PtrTy(context),Type::getInt64Ty(context)}, false);
+//            auto callee_r = BB.getModule()->getOrInsertFunction("mark_invalid", type_r);
+//            ConstantInt *size_r = builder.getInt64(32);
+//
+//            CallInst* ci=CallInst::Create(callee_r, {arr_alloc,size_r}, "");
+//	    ci->insertAfter(arr_alloc);
+//
+//            allocs.push_back(arr_alloc);
+//            sizes.push_back(32);
 
 
  
@@ -216,8 +216,8 @@ namespace {
             IRBuilder<> builder(&BB);
 
             long sz=dyn_cast<AllocaInst>(&Inst)->getAllocationSizeInBits(lt).getValue()/8;
-            //start inserting redzone
 
+            //start inserting redzone
             Type* it = IntegerType::getInt8Ty(context);
             ArrayType* arrayType = ArrayType::get(it, 32-(sz%32));
             AllocaInst* arr_alloc = new AllocaInst(
