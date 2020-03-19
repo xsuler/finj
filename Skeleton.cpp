@@ -99,7 +99,7 @@ namespace {
     SkeletonPass() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F) {
-      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="mark_valid"||F.getName()=="mark_invalid"||F.getName()=="enter_func"||F.getName()=="leave_func"||F.getName()=="do_set_fault"||F.getName()=="memcpy"){
+      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="mark_valid"||F.getName()=="mark_invalid"||F.getName()=="enter_func"||F.getName()=="leave_func"||F.getName()=="memcpy"){
 	  return false;
      }
      vector<Value*> allocs;
@@ -175,24 +175,24 @@ namespace {
       if (ReturnInst *RI = dyn_cast<ReturnInst>(&Inst)) {
             IRBuilder<> builder(&BB);
 
-            Type* it = IntegerType::getInt8Ty(context);
-            ArrayType* arrayType = ArrayType::get(it, 32);
-            AllocaInst* arr_alloc = new AllocaInst(
-                arrayType, 0, "rz"+to_string(auid++) , &Inst);
-            MDNode* N = MDNode::get(context, MDString::get(context, "true"));
-            arr_alloc->setMetadata("isRedZone",N);
-
-            //insert func for redzone
-            FunctionType *type_r = FunctionType::get(Type::getVoidTy(context), {Type::getInt64PtrTy(context),Type::getInt64Ty(context)}, false);
-            auto callee_r = BB.getModule()->getOrInsertFunction("mark_invalid", type_r);
-            ConstantInt *size_r = builder.getInt64(32);
-
-            CallInst* ci=CallInst::Create(callee_r, {arr_alloc,size_r}, "");
-	    ci->insertAfter(arr_alloc);
-
-            allocs.push_back(arr_alloc);
-            sizes.push_back(32);
-
+//            Type* it = IntegerType::getInt8Ty(context);
+//            ArrayType* arrayType = ArrayType::get(it, 32);
+//            AllocaInst* arr_alloc = new AllocaInst(
+//                arrayType, 0, "rz"+to_string(auid++) , &Inst);
+//            MDNode* N = MDNode::get(context, MDString::get(context, "true"));
+//            arr_alloc->setMetadata("isRedZone",N);
+//
+//            //insert func for redzone
+//            FunctionType *type_r = FunctionType::get(Type::getVoidTy(context), {Type::getInt64PtrTy(context),Type::getInt64Ty(context)}, false);
+//            auto callee_r = BB.getModule()->getOrInsertFunction("mark_invalid", type_r);
+//            ConstantInt *size_r = builder.getInt64(32);
+//
+//            CallInst* ci=CallInst::Create(callee_r, {arr_alloc,size_r}, "");
+//	    ci->insertAfter(arr_alloc);
+//
+//            allocs.push_back(arr_alloc);
+//            sizes.push_back(32);
+//
 
  
             for(int i=0;i<allocs.size();i++){
@@ -219,7 +219,7 @@ namespace {
 
             //start inserting redzone
             Type* it = IntegerType::getInt8Ty(context);
-            ArrayType* arrayType = ArrayType::get(it, 32-(sz%32));
+            ArrayType* arrayType = ArrayType::get(it, 32 + 32-(sz%32));
             AllocaInst* arr_alloc = new AllocaInst(
                 arrayType, 0, "rz"+to_string(auid++));
 	    arr_alloc->insertAfter(&Inst);
