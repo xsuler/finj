@@ -134,7 +134,7 @@ namespace {
             //insert func for redzone
             FunctionType *type_r = FunctionType::get(Type::getVoidTy(context), {Type::getInt64PtrTy(context),Type::getInt64Ty(context)}, false);
             auto callee_r = BB.getModule()->getOrInsertFunction("mark_invalid", type_r);
-            ConstantInt *size_r = builder.getInt64(32));
+            ConstantInt *size_r = builder.getInt64(32);
 
             CallInst* ci=CallInst::Create(callee_r, {arr_alloc,size_r}, "");
 	    ci->insertAfter(arr_alloc);
@@ -185,7 +185,7 @@ namespace {
             //insert func for redzone
             FunctionType *type_r = FunctionType::get(Type::getVoidTy(context), {Type::getInt64PtrTy(context),Type::getInt64Ty(context)}, false);
             auto callee_r = BB.getModule()->getOrInsertFunction("mark_invalid", type_r);
-            ConstantInt *size_r = builder.getInt64(32));
+            ConstantInt *size_r = builder.getInt64(32);
 
             CallInst* ci=CallInst::Create(callee_r, {arr_alloc,size_r}, "");
 	    ci->insertAfter(arr_alloc);
