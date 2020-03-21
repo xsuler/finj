@@ -273,7 +273,19 @@ namespace {
         }
     }
   }
+    for (auto &BB : F) {
+        for (auto &Inst : BB) {
+           if(isStaticAlloc(&Inst)){
+            if(cast<MDString>(Inst.getMetadata("isRedZone")->getOperand(0))->getString()!="true"){
+                Inst.eraseFromParent();
+            }
+           }
+     
+        }
+      }
+ 
       return false;
+
     }
 
 
