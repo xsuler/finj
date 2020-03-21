@@ -20,6 +20,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/ADT/Twine.h"
@@ -107,12 +108,28 @@ namespace {
      vector<int64_t> sizes;
      int auid{0};
 
-
-     int flag=0;
-
-
       LLVMContext &context = F.getParent()->getContext();
       DataLayout lt=F.getParent()->getDataLayout();
+
+     int LongSize = F.getParent()->getDataLayout().getPointerSizeInBits();
+     Type* IntptrTy = Type::getIntNTy(context, LongSize);
+
+     int flag=0;
+     long vec_size=16;
+     vector<Value*> vec;
+     int cur_pos=0;
+
+
+
+      for (auto &BB : F) {
+        for (auto &Inst : BB) {
+           if(isStaticAlloc(&Inst)){
+            long sz=dyn_cast<AllocaInst>(&Inst)->getAllocationSizeInBits(lt).getValue()/8;
+            vec_size+=sz+16-sz%16;
+           }
+     
+        }
+      }
       for (auto &BB : F) {
         for (auto &Inst : BB) {
 
@@ -125,8 +142,16 @@ namespace {
             GlobalVariable* name= builder.CreateGlobalString(F.getName());
             CallInst::Create(callee, {name}, "",&Inst);
 
+            if(vec.size()==0){
+                Type* it = IntegerType::getInt8Ty(context);
+                ArrayType* arrayType = ArrayType::get(it, vec_size);
+                AllocaInst* arr_alloc = new AllocaInst(
+                    arrayType, 0, "vec" , &Inst);
+                vec.push_back(arr_alloc);
 
- 
+                MDNode* N = MDNode::get(context, MDString::get(context, "true"));
+                arr_alloc->setMetadata("isRedZone",N);
+            } 
           }
           bool IsWrite;
           uint64_t TypeSize;
@@ -158,23 +183,38 @@ namespace {
       if (ReturnInst *RI = dyn_cast<ReturnInst>(&Inst)) {
             IRBuilder<> builder(&BB);
 
-            Type* it = IntegerType::getInt8Ty(context);
-            ArrayType* arrayType = ArrayType::get(it, 16);
-            AllocaInst* arr_alloc = new AllocaInst(
-                arrayType, 0, "rz"+to_string(auid++) , &Inst);
-            MDNode* N = MDNode::get(context, MDString::get(context, "true"));
-            arr_alloc->setMetadata("isRedZone",N);
+            //Type* it = IntegerType::getInt8Ty(context);
+            //ArrayType* arrayType = ArrayType::get(it, 16);
+            //AllocaInst* arr_alloc = new AllocaInst(
+            //    arrayType, 0, "rz"+to_string(auid++) , &Inst);
+            //MDNode* N = MDNode::get(context, MDString::get(context, "true"));
+            //arr_alloc->setMetadata("isRedZone",N);
 
             //insert func for redzone
-            FunctionType *type_r = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context),Type::getInt64Ty(context)}, false);
-            auto callee_r = BB.getModule()->getOrInsertFunction("mark_invalid", type_r);
-            ConstantInt *size_r = builder.getInt64(16);
+            //FunctionType *type_r = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context),Type::getInt64Ty(context)}, false);
+            //auto callee_r = BB.getModule()->getOrInsertFunction("mark_invalid", type_r);
+            //ConstantInt *size_r = builder.getInt64(16);
 
-            CallInst::Create(callee_r, {arr_alloc,size_r}, "", &Inst);
+            //CallInst::Create(callee_r, {arr_alloc,size_r}, "", &Inst);
 
-            allocs.push_back(arr_alloc);
+            //allocs.push_back(arr_alloc);
+            //sizes.push_back(16);
+            IRBuilder<> IRB(RI);
+
+            ConstantInt *offset =IRB.getInt64(cur_pos);
+            Value *rzv=IRB.CreateIntToPtr(
+            IRB.CreateAdd(vec[0],offset),Type::getInt8PtrTy(context));
+            
+
+           //insert func for redzone
+            FunctionType *type_rz = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context),Type::getInt64Ty(context)}, false);
+            auto callee_rz = BB.getModule()->getOrInsertFunction("mark_invalid", type_rz);
+            ConstantInt *size_rz = builder.getInt64(16);
+
+            CallInst* ci_rz=CallInst::Create(callee_rz, {rzv,size_rz}, "",RI);
+
+            allocs.push_back(rzv);
             sizes.push_back(16);
-
 
  
             for(int i=0;i<allocs.size();i++){
@@ -196,18 +236,23 @@ namespace {
       if(isStaticAlloc(&Inst)){
         if(cast<MDString>(Inst.getMetadata("isRedZone")->getOperand(0))->getString()!="true"){
             IRBuilder<> builder(&BB);
+            AllocaInst *AI=dyn_cast<AllocaInst>(&Inst);
+            long sz=AI->getAllocationSizeInBits(lt).getValue()/8;
 
-            long sz=dyn_cast<AllocaInst>(&Inst)->getAllocationSizeInBits(lt).getValue()/8;
+            
+
+            IRBuilder<> IRB(&Inst);
+            ConstantInt *offset =IRB.getInt64(cur_pos+16-sz%16);
+            
+            auto *newv=IRB.CreateIntToPtr(
+               IRB.CreateAdd(vec[0],offset),AI->getType());
+
+            AI->replaceAllUsesWith(newv);
 
 
-            //start inserting redzone
-            Type* it = IntegerType::getInt8Ty(context);
-            ArrayType* arrayType = ArrayType::get(it, 16-(sz%16));
-            AllocaInst* arr_alloc = new AllocaInst(
-                arrayType, 0, "rz"+to_string(auid++),&Inst);
-
-            MDNode* N = MDNode::get(context, MDString::get(context, "true"));
-            arr_alloc->setMetadata("isRedZone",N);
+            ConstantInt *offset_rz =IRB.getInt64(cur_pos);
+            Value *rzv=IRB.CreateIntToPtr(
+               IRB.CreateAdd(vec[0],offset_rz),Type::getInt8PtrTy(context));
             
 
             //insert func for redzone
@@ -215,11 +260,12 @@ namespace {
             auto callee = BB.getModule()->getOrInsertFunction("mark_invalid", type);
             ConstantInt *size = builder.getInt64(16-(sz%16));
 
-            CallInst* ci=CallInst::Create(callee, {arr_alloc,size}, "",&Inst);
+            CallInst::Create(callee, {rzv,size}, "",&Inst);
 
-            allocs.push_back(arr_alloc);
+            allocs.push_back(rzv);
             sizes.push_back(16-(sz%16));
 
+            cur_pos+=sz+16-sz%16;
           }
           else{
             errs()<<"meet one redzone\n";
