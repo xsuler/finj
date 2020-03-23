@@ -104,7 +104,6 @@ namespace {
      if(F.getName()=="mem_to_shadow"||F.getName()=="report_action"||F.getName()=="report_xasan"||F.getName()=="willInject"||F.getName()=="mark_valid"||F.getName()=="mark_invalid"||F.getName()=="enter_func"||F.getName()=="leave_func"||F.getName()=="memcpy"||F.getName()=="printk"||F.getName()=="vprintk_common"||F.getName()=="_spin_lock_recursive"||F.getName()=="_spin_lock"||F.getName()=="_spin_lock_cb"||F.getName()=="vsnprintf"){
 	  return false;
      }
-     errs()<<"----------------------------------------------\n";
      vector<Value*> allocs;
      vector<int64_t> sizes;
      int auid{0};
@@ -124,6 +123,9 @@ namespace {
 
       for (auto &BB : F) {
         for (auto &Inst : BB) {
+	   if(LooksLikeCodeInBug11395(&Inst)){
+		return false;
+	   }
            if(isStaticAlloc(&Inst)){
             long sz=dyn_cast<AllocaInst>(&Inst)->getAllocationSizeInBits(lt).getValue()/8;
             vec_size+=sz+16-sz%16;
@@ -270,6 +272,13 @@ namespace {
       return false;
 
     }
+
+	bool LooksLikeCodeInBug11395(Instruction *I) {
+	  CallInst *CI = dyn_cast<CallInst>(I);
+	  if (!CI || !CI->isInlineAsm()) return false;
+	  // We have inline assembly with quite a few arguments.
+	  return true;
+	}
 
     bool isStaticAlloc(Instruction *I){
       if (AllocaInst *AI = dyn_cast<AllocaInst>(I)) {
