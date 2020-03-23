@@ -200,14 +200,12 @@ namespace {
 
             CallInst* ci_rz=CallInst::Create(callee_rz, {rzv,size_rz}, "",RI);
 
-            allocs.push_back(rzv);
-            sizes.push_back(16);
 
  
             for(int i=0;i<allocs.size();i++){
                 Value* redZone = allocs[i];
                 FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context),Type::getInt64Ty(context)}, false);
-                auto callee = BB.getModule()->getOrInsertFunction("mark_valid", type);
+                auto callee = BB.getModule()->getOrInsertFunction("mark_invalid", type);
                 ConstantInt *size = builder.getInt64(sizes[i]);
 
                 CallInst::Create(callee, {redZone,size}, "",RI);
@@ -236,19 +234,34 @@ namespace {
 
             AI->replaceAllUsesWith(newv);
 
+            //insert func for normal
+            {
+                ConstantInt *offset_nm =IRB.getInt64(cur_pos+16-sz%16);
+                Value *nmv=IRB.CreateIntToPtr(
+                   IRB.CreateAdd(vec[0],offset_nm),Type::getInt8PtrTy(context));
+                FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context),Type::getInt64Ty(context)}, false);
+                auto callee = BB.getModule()->getOrInsertFunction("mark_valid", type);
+                ConstantInt *size = builder.getInt64(sz);
 
-            ConstantInt *offset_rz =IRB.getInt64(cur_pos);
-            Value *rzv=IRB.CreateIntToPtr(
-               IRB.CreateAdd(vec[0],offset_rz),Type::getInt8PtrTy(context));
+                CallInst::Create(callee, {nmv,size}, "",Inst.getNextNonDebugInstruction());
+
+                allocs.push_back(nmv);
+                sizes.push_back(sz);
+
+            }
+
             //insert func for redzone
-            FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context),Type::getInt64Ty(context)}, false);
-            auto callee = BB.getModule()->getOrInsertFunction("mark_invalid", type);
-            ConstantInt *size = builder.getInt64(16-(sz%16));
+            {
+                ConstantInt *offset_rz =IRB.getInt64(cur_pos);
+                Value *rzv=IRB.CreateIntToPtr(
+                   IRB.CreateAdd(vec[0],offset_rz),Type::getInt8PtrTy(context));
+                FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context),Type::getInt64Ty(context)}, false);
+                auto callee = BB.getModule()->getOrInsertFunction("mark_invalid", type);
+                ConstantInt *size = builder.getInt64(16-(sz%16));
 
-            CallInst::Create(callee, {rzv,size}, "",&Inst);
+                CallInst::Create(callee, {rzv,size}, "",&Inst);
 
-            allocs.push_back(rzv);
-            sizes.push_back(16-(sz%16));
+            }
 
             cur_pos+=sz+16-sz%16;
           }
@@ -265,7 +278,6 @@ namespace {
                 Inst.eraseFromParent();
             }
            }
-     
         }
       }
  
