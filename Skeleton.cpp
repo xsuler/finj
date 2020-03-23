@@ -188,24 +188,26 @@ namespace {
 
             IRBuilder<> IRB(RI);
 
+           //insert func for redzone
+	   //
             ConstantInt *offset =IRB.getInt64(cur_pos);
             Value *rzv=IRB.CreateIntToPtr(
             IRB.CreateAdd(vec[0],offset),Type::getInt8PtrTy(context));
             
-
-           //insert func for redzone
             FunctionType *type_rz = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context),Type::getInt64Ty(context)}, false);
             auto callee_rz = BB.getModule()->getOrInsertFunction("mark_invalid", type_rz);
             ConstantInt *size_rz = builder.getInt64(16);
 
             CallInst* ci_rz=CallInst::Create(callee_rz, {rzv,size_rz}, "",RI);
 
+            allocs.push_back(rzv);
+            sizes.push_back(16);
 
  
             for(int i=0;i<allocs.size();i++){
                 Value* redZone = allocs[i];
                 FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context),Type::getInt64Ty(context)}, false);
-                auto callee = BB.getModule()->getOrInsertFunction("mark_invalid", type);
+                auto callee = BB.getModule()->getOrInsertFunction("mark_valid", type);
                 ConstantInt *size = builder.getInt64(sizes[i]);
 
                 CallInst::Create(callee, {redZone,size}, "",RI);
@@ -235,20 +237,20 @@ namespace {
             AI->replaceAllUsesWith(newv);
 
             //insert func for normal
-            {
-                ConstantInt *offset_nm =IRB.getInt64(cur_pos+16-sz%16);
-                Value *nmv=IRB.CreateIntToPtr(
-                   IRB.CreateAdd(vec[0],offset_nm),Type::getInt8PtrTy(context));
-                FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context),Type::getInt64Ty(context)}, false);
-                auto callee = BB.getModule()->getOrInsertFunction("mark_valid", type);
-                ConstantInt *size = builder.getInt64(sz);
+           // {
+           //     ConstantInt *offset_nm =IRB.getInt64(cur_pos+16-sz%16);
+           //     Value *nmv=IRB.CreateIntToPtr(
+           //        IRB.CreateAdd(vec[0],offset_nm),Type::getInt8PtrTy(context));
+           //     FunctionType *type = FunctionType::get(Type::getVoidTy(context), {Type::getInt8PtrTy(context),Type::getInt64Ty(context)}, false);
+           //     auto callee = BB.getModule()->getOrInsertFunction("mark_valid", type);
+           //     ConstantInt *size = builder.getInt64(sz);
 
-                CallInst::Create(callee, {nmv,size}, "",Inst.getNextNonDebugInstruction());
+           //     CallInst::Create(callee, {nmv,size}, "",Inst.getNextNonDebugInstruction());
 
-                allocs.push_back(nmv);
-                sizes.push_back(sz);
+           //     allocs.push_back(nmv);
+           //     sizes.push_back(sz);
 
-            }
+           // }
 
             //insert func for redzone
             {
@@ -261,6 +263,8 @@ namespace {
 
                 CallInst::Create(callee, {rzv,size}, "",&Inst);
 
+                allocs.push_back(rzv);
+                sizes.push_back(16-(sz%16));
             }
 
             cur_pos+=sz+16-sz%16;
