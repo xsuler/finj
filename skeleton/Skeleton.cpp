@@ -71,7 +71,8 @@ using namespace llvm;
 namespace {
   struct SkeletonPass : public FunctionPass {
     static char ID;
-    SkeletonPass() : FunctionPass(ID) {}
+    SkeletonPass() : FunctionPass(ID) {
+    }
 
 
     virtual bool runOnFunction(Function &F) {
@@ -91,10 +92,21 @@ namespace {
             BasicBlock *FalseDest = BI->getSuccessor(1);
             if(isErrorHandlingBlock(TrueDest)){
               insertFunc(BB, BI, context, TrueDest, FalseDest);
+	      std::ofstream fileof;
+	      fileof.open("/root/faultfile",std::ios_base::app);
+	      fileof<<F.getParent()->getSourceFileName()<<"\n";
+	      fileof.close();
+
+
               break;
             }
             else if(isErrorHandlingBlock(FalseDest)){
               insertFunc(BB, BI, context, FalseDest, TrueDest);
+              std::ofstream fileof;
+	      fileof.open("/root/faultfile",std::ios_base::app);
+	      fileof<<F.getParent()->getSourceFileName()<<"\n";
+	      fileof.close();
+
               break;
             }
           }
@@ -119,6 +131,7 @@ namespace {
       uidof<<uid+1;
       uidof.close();
 
+
       errs()<<"---------------find one fault: "<<uid<< " -----------------\n";
       IRBuilder<> builder(&BB);
       ConstantInt *cuid = builder.getInt32(uid);
@@ -130,6 +143,8 @@ namespace {
       ReplaceInstWithInst(inst_t,toEHC);
 
     }
+
+            //GlobalVariable* file= builder.CreateGlobalString();
 
     bool isErrorHandlingBlock(BasicBlock *BB){
       for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; ++I){
