@@ -76,7 +76,7 @@ namespace {
 
 
     virtual bool runOnFunction(Function &F) {
-      if (F.getName()=="willInject"){
+      if (F.getName()=="willInject"||F.getName()=="add_cov"){
           return false;
       }
 
@@ -150,7 +150,7 @@ namespace {
       for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; ++I){
         if (BranchInst *BI = dyn_cast<BranchInst>(I)){
           if (!BI->isConditional()) {
-            if(BI->getOperand(0)->getName() == "fail"){
+            if(BI->getOperand(0)->getName().startswith("fail")){
               return true;
             }
           }
